@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AI Powered Visual Query System</title>
+  <style>
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .app {
+      background: #ffffff;
+      width: 900px;
+      max-width: 95%;
+      border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+      padding: 20px 30px 30px;
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #333;
+    }
+
+    .section {
+      margin-bottom: 20px;
+      padding: 15px;
+      border-radius: 12px;
+      background: #f7f8fc;
+      border: 1px solid #e0e3f0;
+    }
+
+    .section-title {
+      font-weight: bold;
+      margin-bottom: 10px;
+      color: #444;
+    }
+
+    button {
+      margin: 5px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: #fff;
+      font-weight: 600;
+      transition: transform 0.1s ease, box-shadow 0.1s ease, opacity 0.1s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+      opacity: 0.95;
+    }
+
+    input[type="text"] {
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      width: 70%;
+      max-width: 500px;
+      font-size: 14px;
+    }
+
+    video, img {
+      max-width: 320px;
+      border-radius: 12px;
+      border: 2px solid #ddd;
+      margin-top: 10px;
+      background: #000;
+    }
+
+    #answer {
+      margin-top: 10px;
+      padding: 15px;
+      border-radius: 12px;
+      background: #eef2ff;
+      border: 1px solid #c7d2fe;
+      min-height: 60px;
+      color: #1e293b;
+      white-space: pre-wrap;
+    }
+
+    .row {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+
+<div class="app">
+  <h2>AI Powered Visual Query System</h2>
+
+  <!-- Step 1 -->
+  <div class="section" id="step1">
+    <div class="section-title">1️⃣ Choose Image Source</div>
+    <p>Do you already have a photo or want to capture one?</p>
+    <button onclick="chooseUpload()">📁 Upload Photo</button>
+    <button onclick="chooseCapture()">📸 Capture Photo</button>
+    <input type="file" id="imgUpload" accept="image/*" class="hidden">
+  </div>
+
+  <!-- Step 2 -->
+  <div class="section">
+    <div class="section-title">2️⃣ Image Preview / Camera</div>
+    <div class="row">
+      <div id="cameraSection" class="hidden">
+        <video id="camera" autoplay></video><br>
+        <button onclick="capture()">Take Photo</button>
+      </div>
+      <div>
+        <img id="preview" class="hidden" />
+      </div>
+    </div>
+  </div>
+
+  <canvas id="canvas" class="hidden"></canvas>
+
+  <!-- Step 3 -->
+  <div class="section hidden" id="step3">
+    <div class="section-title">3️⃣ Ask Your Question</div>
+    <input type="text" id="query" placeholder="Ask something about the image...">
+    <button onclick="startSpeech()">🎤 Speak</button>
+    <br><br>
+    <button onclick="askGemini()">🚀 Ask Gemini</button>
+  </div>
+
+  <!-- Answer -->
+  <div class="section">
+    <div class="section-title">💬 Answer</div>
+    <div id="answer">Waiting...</div>
+  </div>
+</div>
+
+<script>
+const API_KEY = "AIzaSyCmE5f1vi-63TFIyIiFSLKefBXPhn6RCF4";
+
+// "Temporary DB"
+let tempImageBase64 = null;
+let tempQuery = "";
+
+// Camera setup
+const video = document.getElementById("camera");
+const canvas = document.getElementById("canvas");
+const preview = document.getElementById("preview");
+
+navigator.mediaDevices.getUserMedia({ video: true })
+  .then(stream => video.srcObject = stream)
+  .catch(() => console.log("Camera not allowed"));
+
+function chooseUpload() {
+  document.getElementById("imgUpload").click();
+}
+
+document.getElementById("imgUpload").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  tempImageBase64 = await fileToBase64(file);
+  showPreview(tempImageBase64);
+});
+
+function chooseCapture() {
+  document.getElementById("cameraSection").classList.remove("hidden");
+}
+
+function capture() {
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0);
+  tempImageBase64 = canvas.toDataURL("image/png").split(",")[1];
+  showPreview(tempImageBase64);
+}
+
+function showPreview(base64) {
+  preview.src = "data:image/png;base64," + base64;
+  preview.classList.remove("hidden");
+  document.getElementById("step3").classList.remove("hidden");
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// Speech to text
+function startSpeech() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    alert("Speech recognition not supported. Use Chrome.");
+    return;
+  }
+  const recognition = new SpeechRecognition();
+  recognition.lang = "en-US";
+  recognition.onresult = (event) => {
+    document.getElementById("query").value = event.results[0][0].transcript;
+  };
+  recognition.start();
+}
+
+// Ask Gemini
+async function askGemini() {
+  tempQuery = document.getElementById("query").value;
+
+  if (!tempImageBase64 || !tempQuery) {
+    alert("Please select an image and enter a question");
+    return;
+  }
+
+  document.getElementById("answer").innerText = "Thinking...";
+
+  const finalPrompt = `Look at the image carefully and answer this question:\n${tempQuery}`;
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
+
+  const body = {
+    contents: [{
+      parts: [
+        { inline_data: { mime_type: "image/png", data: tempImageBase64 } },
+        { text: finalPrompt }
+      ]
+    }]
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+
+  const data = await res.json();
+
+  let answer = "No response";
+  if (data.candidates && data.candidates.length > 0) {
+    const parts = data.candidates[0].content.parts;
+    answer = parts.map(p => p.text || "").join(" ");
+  }
+
+  document.getElementById("answer").innerText = answer;
+}
+</script>
+
+</body>
+</html>
